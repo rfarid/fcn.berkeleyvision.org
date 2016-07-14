@@ -21,13 +21,13 @@ max_h_perc=0.70
 infolder='./0my_data'
 outfolder='./0out'
 infiles=[
-	infolder+'/ex1_04.jpg']
-	# infolder+'/ex1_62.jpg',
-	# infolder+'/ex2_1.jpg',
-	# infolder+'/ex2_5.jpg',
-	# infolder+'/c2_f01357.jpg',
-	# infolder+'/c2_f01543.jpg',
-	# infolder+'/c2_f02392.jpg']
+	infolder+'/ex1_04.jpg',
+	infolder+'/ex1_62.jpg',
+	infolder+'/ex2_1.jpg',
+	infolder+'/ex2_5.jpg',
+	infolder+'/c2_f01357.jpg',
+	infolder+'/c2_f01543.jpg',
+	infolder+'/c2_f02392.jpg']
 deploy_file=sift_type+"/deploy.prototxt"
 model_file=sift_type+'-heavy.caffemodel'
 
