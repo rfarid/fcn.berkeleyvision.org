@@ -1,3 +1,9 @@
+# Reza Farid, Fugro Roames
+# Created:      2016/07/13
+# Last update:  2016/07/14
+#
+# This code is a modified version of infer.py
+#
 import numpy as np
 from PIL import Image
 # import scipy.misc
@@ -12,6 +18,19 @@ sift_type='siftflow-fcn8s' #siftflow-fcn32s
 partial_resize=0.50
 tile_step=dim//2
 max_h_perc=0.70
+infolder='./0my_data'
+outfolder='./0out'
+infiles=[
+	infolder+'/ex1_04.jpg',
+	infolder+'/ex1_62.jpg',
+	infolder+'/ex2_1.jpg',
+	infolder+'/ex2_5.jpg',
+	infolder+'/c2_f01357.jpg',
+	infolder+'/c2_f01543.jpg',
+	infolder+'/c2_f02392.jpg']
+deploy_file=sift_type+"/deploy.prototxt"
+model_file=sift_type+'-heavy.caffemodel'
+
 def do_infer(im,net):
 	# load image, switch to BGR, subtract mean, and make dims C x H x W for Caffe
 	# im = Image.open('pascal/VOC2010/JPEGImages/2007_000129.jpg')
@@ -71,7 +90,6 @@ def form_boundary(left_top_corner,bb_max,tile):
 		st_w=bb_max[0]-tile
 	return (st_w,st_h,end_w,end_h)
 
-
 # -------------------------------------------------------------------------
 #                           main
 # -------------------------------------------------------------------------
@@ -79,23 +97,13 @@ if __name__ == '__main__':
 
 	# load net
 	# net = caffe.Net('fcn8s/deploy.prototxt', 'fcn8s/fcn8s-heavy-40k.caffemodel', caffe.TEST)
-	deploy_file=sift_type+"/deploy.prototxt"
-	model_file=sift_type+'-heavy.caffemodel'
 	net = caffe.Net(deploy_file, model_file, caffe.TEST)
 
-	infiles=[
-	# '/home/rezaf/projects/data/01_tiles/ex1_04.jpg',
-	# '/home/rezaf/projects/data/01_tiles/ex1_62.jpg',
-	# '/home/rezaf/projects/data/02_tiles/ex2_1.jpg',
-	# '/home/rezaf/projects/data/02_tiles/ex2_5.jpg',
-	'/home/rezaf/Downloads/frames/C0002/c2_f01357.jpg',
-	'/home/rezaf/Downloads/frames/C0002/c2_f01543.jpg',	
-	'/home/rezaf/Downloads/frames/C0002/c2_f02392.jpg']
 	for infile in infiles:
 		print "Input:",infile
 		index=infile.rfind("/")
 		filename=infile[index+1:-4]
-		outfile_prefix = '0out/'+filename + "_out_" + sift_type
+		outfile_prefix = outfolder+"/"+filename + "_out_" + sift_type
 		im = Image.open(infile)
 		w,h = im.size
 		if w>dim or h>dim:
