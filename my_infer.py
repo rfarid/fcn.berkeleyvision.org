@@ -10,16 +10,29 @@ from PIL import Image
 import matplotlib.pyplot as plt
 
 import caffe
+FIG_SIZE_W=12
+FIG_SIZE_H=10
 CLASS = 20
+MAX_CLASS = 33
+MIN_CLASS = 1
+class_numbers=range(MIN_CLASS,MAX_CLASS+1)
+class_names=['awning', 'balcony', 'bird', 'boat', 'bridge',
+'building', 'bus', 'car', 'cow', 'crosswalk',
+'desert', 'door', 'fence', 'field', 'grass',
+'moon','mountain','person','plant','pole',
+'river', 'road', 'rock', 'sand', 'sea',
+'sidewalk', 'sign', 'sky', 'staircase', 'streetlight',
+'sun', 'tree', 'window']
 COEF = 7
 dim = 500
+save_classes_separate=True
 blob_strs=['score_sem', 'score_geo'] # 'score'
 sift_type='siftflow-fcn8s' #siftflow-fcn32s
 partial_resize=0.50
 tile_step=dim//2
 max_h_perc=0.70
 infolder='./0my_data'
-outfolder='./0out'
+outfolder='./0out2'
 infiles=[
 	infolder+'/ex1_04.jpg',
 	infolder+'/ex1_62.jpg',
@@ -53,28 +66,25 @@ def do_infer(im,net):
 		out = net.blobs[blob_str].data[0].argmax(axis=0)
 
 		if blob_str=="score_sem":
-			out_class = np.copy(out)
+			out_semantic = np.copy(out)
 
 		out = out * COEF
 		images.append([out,blob_str])
 		# scipy.misc.toimage(out, cmin=0, cmax=255).save(outfile)
-	mr,mc=out_class.shape
-	for i in range(mr):
-		for j in range(mc):
-			if out_class[i,j]!=CLASS:
-				out_class[i,j]=0
-	out_class = out_class * COEF
-	images.append([out_class,"Class "+str(CLASS)+"?"])
-	return images
+	out_class_chosen = highlight_class(out_semantic,CLASS)
+	images.append([out_class_chosen,"Class "+str(CLASS)+"?"])
 
-def save_results(outfile, images):
-	plt.figure(1)
+	return out_semantic, images
+
+def save_results(outfile, images,nrows=2,ncols=2):
+	# plt.figure(1)
+	plt.figure(1,figsize=(FIG_SIZE_W,FIG_SIZE_H))
 	num_images=len(images)
 	for i in range(num_images):
-	    plt.subplot(2,2,i+1), plt.imshow(images[i][0])
+	    plt.subplot(nrows,ncols,i+1), plt.imshow(images[i][0])
 	    plt.xticks([]),plt.yticks([])
-	    plt.title(images[i][1])
-	plt.savefig(outfile)
+	    plt.title(images[i][1],fontsize=10)
+	plt.savefig(outfile, bbox_inches='tight')
 	# plt.show()
 
 def form_boundary(left_top_corner,bb_max,tile):
@@ -88,6 +98,16 @@ def form_boundary(left_top_corner,bb_max,tile):
 		end_w=bb_max[0]
 		st_w=bb_max[0]-tile
 	return (st_w,st_h,end_w,end_h)
+
+def highlight_class(in_array,class_num=CLASS):
+	out_array = np.copy(in_array)
+	mr,mc=out_array.shape
+	for i in range(mr):
+		for j in range(mc):
+			if out_array[i,j]!=class_num:
+				out_array[i,j]=0
+	out_array = out_array * COEF
+	return out_array
 
 # -------------------------------------------------------------------------
 #                           main
@@ -136,5 +156,15 @@ if __name__ == '__main__':
 		counter=0
 		for input_image in input_images:
 			print "Output:", input_image[1]+"..."
-			images = do_infer(input_image[0],net)
+			out_semantic, images = do_infer(input_image[0],net)
 			save_results(input_image[1],images)
+			if save_classes_separate:
+				class_images=[]
+				classes_outfile=input_image[1][:-4]+"_classes.jpg"
+				class_images.append(images[0])
+				class_images.append(images[1])
+				for class_number in class_numbers:
+					out_class_temp = highlight_class(out_semantic,class_number)
+					class_images.append((out_class_temp,class_names[class_number-1]))
+				save_results(classes_outfile,class_images,5,7)
+
