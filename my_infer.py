@@ -1,53 +1,42 @@
 # Reza Farid, Fugro Roames
 # Created:      2016/07/13
-# Last update:  2016/07/14
+# Last update:  2016/07/15
 #
 # This code is a modified version of infer.py
 #
+import os
+import caffe
+import logging
+import argparse
 import numpy as np
 from PIL import Image
-# import scipy.misc
-import matplotlib.pyplot as plt
+from my_common import *
 
-import caffe
-FIG_SIZE_W=12
-FIG_SIZE_H=10
-CLASS = 20
-MAX_CLASS = 33
-MIN_CLASS = 1
-class_numbers=range(MIN_CLASS,MAX_CLASS+1)
-class_names=['awning', 'balcony', 'bird', 'boat', 'bridge',
-'building', 'bus', 'car', 'cow', 'crosswalk',
-'desert', 'door', 'fence', 'field', 'grass',
-'moon','mountain','person','plant','pole',
-'river', 'road', 'rock', 'sand', 'sea',
-'sidewalk', 'sign', 'sky', 'staircase', 'streetlight',
-'sun', 'tree', 'window']
-COEF = 7
 dim = 500
-save_classes_separate=True
 blob_strs=['score_sem', 'score_geo'] # 'score'
 sift_type='siftflow-fcn8s' #siftflow-fcn32s
 partial_resize=0.50
 tile_step=dim//2
 max_h_perc=0.70
 infolder='./0my_data'
-outfolder='./0out2'
-infiles=[
-	infolder+'/ex1_04.jpg',
-	infolder+'/ex1_62.jpg',
-	infolder+'/ex2_1.jpg',
-	infolder+'/ex2_5.jpg',
-	infolder+'/c2_f01357.jpg',
-	infolder+'/c2_f01543.jpg',
-	infolder+'/c2_f02392.jpg']
+outfolder_prefix='./0out/exp'
 deploy_file=sift_type+"/deploy.prototxt"
 model_file=sift_type+'-heavy.caffemodel'
+LOG_LEVEL_DEF = logging.INFO
+class_numbers=range(MIN_CLASS,MAX_CLASS+1)
+apply_filter=False
+# -------------------------------------------------------------------------
+#                               functions
+# -------------------------------------------------------------------------
 
 def do_infer(im,net):
 	# load image, switch to BGR, subtract mean, and make dims C x H x W for Caffe
 	# im = Image.open('pascal/VOC2010/JPEGImages/2007_000129.jpg')
-	in_ = np.array(im, dtype=np.float32)
+	if apply_filter:
+		in_ = np.array(im, dtype=np.float32)
+		in_ = apply_emboss_filter(in_)
+	else:
+		in_ = np.array(im, dtype=np.float32)
 	in_ = in_[:,:,::-1]
 	in_ -= np.array((104.00698793,116.66876762,122.67891434))
 	in_ = in_.transpose((2,0,1))
@@ -71,53 +60,14 @@ def do_infer(im,net):
 		out = out * COEF
 		images.append([out,blob_str])
 		# scipy.misc.toimage(out, cmin=0, cmax=255).save(outfile)
-	out_class_chosen = highlight_class(out_semantic,CLASS)
-	images.append([out_class_chosen,"Class "+str(CLASS)+"?"])
+	out_class_chosen = highlight_class(out_semantic, CHOSEN_CLASS,COEF)
+	images.append([out_class_chosen,"Class "+str(CHOSEN_CLASS)+"?"])
 
 	return out_semantic, images
 
-def save_results(outfile, images,nrows=2,ncols=2):
-	# plt.figure(1)
-	plt.figure(1,figsize=(FIG_SIZE_W,FIG_SIZE_H))
-	num_images=len(images)
-	for i in range(num_images):
-	    plt.subplot(nrows,ncols,i+1), plt.imshow(images[i][0])
-	    plt.xticks([]),plt.yticks([])
-	    plt.title(images[i][1],fontsize=10)
-	plt.savefig(outfile, bbox_inches='tight')
-	# plt.show()
-
-def form_boundary(left_top_corner,bb_max,tile):
-	st_w,st_h=left_top_corner
-	end_h=st_h+tile
-	end_w=st_w+tile
-	if end_h>bb_max[1]:
-		end_h=bb_max[1]
-		st_h=bb_max[1]-tile
-	if end_w>bb_max[0]:
-		end_w=bb_max[0]
-		st_w=bb_max[0]-tile
-	return (st_w,st_h,end_w,end_h)
-
-def highlight_class(in_array,class_num=CLASS):
-	out_array = np.copy(in_array)
-	mr,mc=out_array.shape
-	for i in range(mr):
-		for j in range(mc):
-			if out_array[i,j]!=class_num:
-				out_array[i,j]=0
-	out_array = out_array * COEF
-	return out_array
-
-# -------------------------------------------------------------------------
-#                           main
-# -------------------------------------------------------------------------
-if __name__ == '__main__':
-
-	# load net
-	# net = caffe.Net('fcn8s/deploy.prototxt', 'fcn8s/fcn8s-heavy-40k.caffemodel', caffe.TEST)
-	net = caffe.Net(deploy_file, model_file, caffe.TEST)
-
+def load_and_infer(infiles, save_classes_separate, outfolder):
+    if not os.path.isdir(outfolder):
+        os.mkdir(outfolder)
 	for infile in infiles:
 		print "Input:",infile
 		index=infile.rfind("/")
@@ -152,6 +102,8 @@ if __name__ == '__main__':
 						counter+=1
 						prev_box=box
 		else:
+			# if w<dim and h<dim:
+			# 	im.thumbnail((dim,dim), Image.ANTIALIAS)
 			input_images=[(im,outfile_prefix+".jpg")]
 		counter=0
 		for input_image in input_images:
@@ -159,12 +111,88 @@ if __name__ == '__main__':
 			out_semantic, images = do_infer(input_image[0],net)
 			save_results(input_image[1],images)
 			if save_classes_separate:
-				class_images=[]
 				classes_outfile=input_image[1][:-4]+"_classes.jpg"
+				class_images=[]
 				class_images.append(images[0])
 				class_images.append(images[1])
-				for class_number in class_numbers:
-					out_class_temp = highlight_class(out_semantic,class_number)
-					class_images.append((out_class_temp,class_names[class_number-1]))
+				class_images=highlight_classes(out_semantic, class_numbers, class_images, COEF)
+				# for class_number in class_numbers:
+				# 	out_class_temp = highlight_class(out_semantic,class_number,COEF)
+				# 	class_images.append((out_class_temp,class_names[class_number-1]))
 				save_results(classes_outfile,class_images,5,7)
+
+def choose_experiment_and_infer():
+	infiles=[
+		infolder+'/ex1_04.jpg',
+		# infolder+'/ex1_62.jpg',
+		# infolder+'/ex2_1.jpg',
+		# infolder+'/ex2_5.jpg',
+		# infolder+'/c2_f01357.jpg',
+		# infolder+'/c2_f01543.jpg',
+		infolder+'/c2_f02392.jpg']
+	experiments = ["No separate classes","Separate Classes"]
+	save_classes_separate_option=[False, True]
+	n=len(experiments)
+	for i in range(n):
+		print str(i+1)+". "+experiments[i]
+	n = raw_input("Experiment number? ")
+	if len(n)<1 or int(n)<1 or int(n)>len(experiments):
+		print "quit."
+		quit()
+	n = int(n)
+
+	return infiles,save_classes_separate_option[n-1],n
+
+
+# -------------------------------------------------------------------------
+#                           main
+# -------------------------------------------------------------------------
+if __name__ == '__main__':
+
+	parser = argparse.ArgumentParser(description='load files and run infer using fcnss')
+	parser.add_argument("-in","--infile", type=str, dest="infile", default=None, help='input file')
+	parser.add_argument('--as', '--use_as', type=str, dest="infile_type", default="i",
+	                    help='type of infile: i (single-image)(*), p (image_pattern), l (image list file), v (video), ias (image-annotations), s (annotation set per entry)')
+	parser.add_argument("-s", "--save_classes_separate", action="store_true", dest="save_classes_separate",
+		help="save the result for each class separately")
+	parser.add_argument('-f', "--apply_emboss_filter", action="store_true", help="apply emboss filter on images")
+	parser.add_argument('-c', '--chosen_class_num', type=int, dest="chosen_class_num", default=CHOSEN_CLASS,
+	                    help='just consider images which have this class number, 0 means all')
+	parser.add_argument("-j", "--just_chosen_class", action="store_true", dest="save_just_chosen_class",
+		help="save just chosen class")
+	parser.add_argument("--log", "--loglevel", dest="loglevel",
+	                    help="log level: DEBUG, INFO(*), WARNING, ERROR, CRITICAL")
+	# -------------------------------------------------------------------
+	# Processing args
+	# -------------------------------------------------------------------
+	args = parser.parse_args()
+	loglevel = args.loglevel
+	input_file = args.infile
+	input_file_type = args.infile_type.upper()
+	set_log_config(loglevel, LOG_LEVEL_DEF)
+	save_classes_separate=args.save_classes_separate
+	apply_filter=args.apply_emboss_filter
+	chosen_class_num = args.chosen_class_num
+	save_just_chosen_class=args.save_just_chosen_class
+	just_str=""
+	if save_just_chosen_class:
+		class_numbers=[chosen_class_num]
+		just_str="_just_"+str(chosen_class_num)
+	# load net
+	# net = caffe.Net('fcn8s/deploy.prototxt', 'fcn8s/fcn8s-heavy-40k.caffemodel', caffe.TEST)
+	net = caffe.Net(deploy_file, model_file, caffe.TEST)
+
+	if input_file is None:
+		infiles,save_classes_separate,n=choose_experiment_and_infer()
+		load_and_infer(infiles,save_classes_separate,outfolder_prefix+str(n)+just_str)
+	else:
+		input_files= load_image_names(input_file,input_file_type)
+		index=input_file.rfind("/")
+		exp_name=input_file[index+1:]
+		index=exp_name.rfind(".")
+		if index>-1:
+			exp_name=exp_name[:index]
+		load_and_infer(input_files, save_classes_separate, outfolder_prefix+"_"+exp_name+just_str)
+
+
 
