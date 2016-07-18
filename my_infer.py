@@ -1,6 +1,6 @@
 # Reza Farid, Fugro Roames
 # Created:      2016/07/13
-# Last update:  2016/07/15
+# Last update:  2016/07/18
 #
 # This code is a modified version of infer.py
 #
@@ -60,8 +60,8 @@ def do_infer(im,net):
 		out = out * COEF
 		images.append([out,blob_str])
 		# scipy.misc.toimage(out, cmin=0, cmax=255).save(outfile)
-	out_class_chosen = highlight_class(out_semantic, CHOSEN_CLASS,COEF)
-	images.append([out_class_chosen,"Class "+str(CHOSEN_CLASS)+"?"])
+	out_class_chosen = highlight_class(out_semantic, chosen_class_num,COEF)
+	images.append([out_class_chosen,"Class "+str(chosen_class_num)+"?"])
 
 	return out_semantic, images
 
@@ -113,8 +113,8 @@ def load_and_infer(infiles, save_classes_separate, outfolder):
 			if save_classes_separate:
 				classes_outfile=input_image[1][:-4]+"_classes.jpg"
 				class_images=[]
-				class_images.append(images[0])
-				class_images.append(images[1])
+				class_images.append(images[0][:])
+				class_images.append(images[1][:])
 				class_images=highlight_classes(out_semantic, class_numbers, class_images, COEF)
 				# for class_number in class_numbers:
 				# 	out_class_temp = highlight_class(out_semantic,class_number,COEF)
@@ -124,15 +124,18 @@ def load_and_infer(infiles, save_classes_separate, outfolder):
 def choose_experiment_and_infer():
 	infiles=[
 		infolder+'/ex1_04.jpg',
-		# infolder+'/ex1_62.jpg',
-		# infolder+'/ex2_1.jpg',
-		# infolder+'/ex2_5.jpg',
-		# infolder+'/c2_f01357.jpg',
-		# infolder+'/c2_f01543.jpg',
+		infolder+'/ex1_62.jpg',
+		infolder+'/ex2_1.jpg',
+		infolder+'/ex2_5.jpg',
+		infolder+'/c2_f01357.jpg',
+		infolder+'/c2_f01543.jpg',
 		infolder+'/c2_f02392.jpg']
-	experiments = ["No separate classes","Separate Classes"]
-	save_classes_separate_option=[False, True]
+	num_files=len(infiles)
+	experiments = ["No separate classes","Separate Classes","Just Pole examples"]
+	save_classes_separate_option=[False, True, True]
 	n=len(experiments)
+	chosen_indices=[range(num_files),range(num_files),range(4)]
+	print chosen_indices
 	for i in range(n):
 		print str(i+1)+". "+experiments[i]
 	n = raw_input("Experiment number? ")
@@ -140,8 +143,9 @@ def choose_experiment_and_infer():
 		print "quit."
 		quit()
 	n = int(n)
-
-	return infiles,save_classes_separate_option[n-1],n
+	chosen_files = [infiles[i] for i in chosen_indices[n-1]]
+	print chosen_files
+	return chosen_files, save_classes_separate_option[n-1],n
 
 
 # -------------------------------------------------------------------------
