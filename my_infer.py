@@ -13,7 +13,12 @@ from PIL import Image
 from my_common import *
 
 dim = 500
-blob_strs=['score_sem', 'score_geo'] # 'score'
+# blob_strs=['score_sem', 'score_geo'] # 'score'
+# nrows=2
+# ncols=2
+blob_strs=['score_sem'] # 'score'
+nrows=1
+ncols=3
 sift_type='siftflow-fcn8s' #siftflow-fcn32s
 partial_resize=0.50
 tile_step=dim//2
@@ -25,6 +30,8 @@ model_file=sift_type+'-heavy.caffemodel'
 LOG_LEVEL_DEF = logging.INFO
 class_numbers=range(MIN_CLASS,MAX_CLASS+1)
 apply_filter=False
+DO_TILING=False
+DO_RESIZE=False
 # -------------------------------------------------------------------------
 #                               functions
 # -------------------------------------------------------------------------
@@ -68,6 +75,8 @@ def do_infer(im,net):
 def load_and_infer(infiles, save_classes_separate, outfolder):
     if not os.path.isdir(outfolder):
         os.mkdir(outfolder)
+    else:
+    	print "exists"
 	for infile in infiles:
 		print "Input:",infile
 		index=infile.rfind("/")
@@ -82,25 +91,27 @@ def load_and_infer(infiles, save_classes_separate, outfolder):
 			im.thumbnail((dim,dim), Image.ANTIALIAS)
 			input_images.append((im,outfile_prefix+"_thumb.jpg"))
 			im = Image.open(infile)
-			# full resize - do not keep aspect ratio
-			im_full_resized = im.resize((dim,dim), Image.ANTIALIAS)
-			input_images.append((im_full_resized,outfile_prefix+"_resized_"+str(dim)+"x"+str(dim)+".jpg"))
-			new_w=int(float(w)*partial_resize)
-			new_h=int(float(h)*partial_resize)
-			print "new::w=",new_w,"h=",new_h, "+" * 30
-			im = im.resize((new_w,new_h),Image.ANTIALIAS)
-			new_h = int(float(new_h) * max_h_perc)
-			counter=1
-			prev_box=(0,0,0,0)
-			for j in range(0,new_h-tile_step//2, tile_step):
-				for i in range(0,new_w-tile_step//2, tile_step):
-					box=form_boundary((i,j),(new_w,new_h),dim)
-					if box!=prev_box:
-						# print i,j,box
-						region=im.crop(box)
-						input_images.append((region,outfile_prefix+"_tile_"+str(counter)+".jpg"))
-						counter+=1
-						prev_box=box
+			if DO_RESIZE:
+				# full resize - do not keep aspect ratio
+				im_full_resized = im.resize((dim,dim), Image.ANTIALIAS)
+				input_images.append((im_full_resized,outfile_prefix+"_resized_"+str(dim)+"x"+str(dim)+".jpg"))
+			if DO_TILING:
+				new_w=int(float(w)*partial_resize)
+				new_h=int(float(h)*partial_resize)
+				print "new::w=",new_w,"h=",new_h, "+" * 30
+				im = im.resize((new_w,new_h),Image.ANTIALIAS)
+				new_h = int(float(new_h) * max_h_perc)
+				counter=1
+				prev_box=(0,0,0,0)
+				for j in range(0,new_h-tile_step//2, tile_step):
+					for i in range(0,new_w-tile_step//2, tile_step):
+						box=form_boundary((i,j),(new_w,new_h),dim)
+						if box!=prev_box:
+							# print i,j,box
+							region=im.crop(box)
+							input_images.append((region,outfile_prefix+"_tile_"+str(counter)+".jpg"))
+							counter+=1
+							prev_box=box
 		else:
 			# if w<dim and h<dim:
 			# 	im.thumbnail((dim,dim), Image.ANTIALIAS)
@@ -109,17 +120,18 @@ def load_and_infer(infiles, save_classes_separate, outfolder):
 		for input_image in input_images:
 			print "Output:", input_image[1]+"..."
 			out_semantic, images = do_infer(input_image[0],net)
-			save_results(input_image[1],images)
+			save_results(input_image[1],images,nrows,ncols)
 			if save_classes_separate:
 				classes_outfile=input_image[1][:-4]+"_classes.jpg"
 				class_images=[]
 				class_images.append(images[0][:])
 				class_images.append(images[1][:])
-				class_images=highlight_classes(out_semantic, class_numbers, class_images, COEF)
+				class_images_out=highlight_classes(out_semantic, class_numbers, class_images, COEF)
 				# for class_number in class_numbers:
 				# 	out_class_temp = highlight_class(out_semantic,class_number,COEF)
 				# 	class_images.append((out_class_temp,class_names[class_number-1]))
-				save_results(classes_outfile,class_images,5,7)
+				# save_results(classes_outfile,class_images_out,5,7)
+				advanced_save_results(classes_outfile,class_images_out)
 
 def choose_experiment_and_infer():
 	infiles=[
@@ -166,6 +178,8 @@ if __name__ == '__main__':
 		help="save just chosen class")
 	parser.add_argument("--log", "--loglevel", dest="loglevel",
 	                    help="log level: DEBUG, INFO(*), WARNING, ERROR, CRITICAL")
+	parser.add_argument('--tile', "--apply_tiling", dest="apply_tiling", action="store_true", help="apply tiling")
+	parser.add_argument('--rnrk', "--resize_not_ratio_kept", dest="resize_not_ratio_kept", action="store_true", help="resize without keeping the ratio")
 	# -------------------------------------------------------------------
 	# Processing args
 	# -------------------------------------------------------------------
@@ -178,6 +192,9 @@ if __name__ == '__main__':
 	apply_filter=args.apply_emboss_filter
 	chosen_class_num = args.chosen_class_num
 	save_just_chosen_class=args.save_just_chosen_class
+	DO_TILING=args.apply_tiling
+	DO_RESIZE=args.resize_not_ratio_kept
+
 	just_str=""
 	if save_just_chosen_class:
 		class_numbers=[chosen_class_num]

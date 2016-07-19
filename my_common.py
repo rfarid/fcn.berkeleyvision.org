@@ -2,6 +2,7 @@ import glob
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import class_VConvFilter
 FIG_SIZE_W=12
 FIG_SIZE_H=10
@@ -107,6 +108,36 @@ def save_results(outfile, images,nrows=2,ncols=2,do_show=False):
         plt.subplot(nrows,ncols,i+1), plt.imshow(images[i][0])
         plt.xticks([]),plt.yticks([])
         plt.title(images[i][1],fontsize=10)
+    if outfile!="":
+        plt.savefig(outfile, bbox_inches='tight')
+    else:
+        do_show=True
+    if do_show:
+        plt.show()
+
+def advanced_save_results(outfile, images,nrows=8,ncols=8,do_show=False,trows=4,tcols=4,num_t=2):
+    plt.figure(1,figsize=(FIG_SIZE_W,FIG_SIZE_H))
+    plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
+    G = gridspec.GridSpec(nrows, ncols)
+    num_images=len(images)
+    counter = 1
+    crow=trows-1
+    ccol=0
+    for i in range(num_images):
+        if i<num_t:
+            axest=plt.subplot(G[0:trows-1, i*tcols:i*tcols+tcols])
+            axest.set_title(images[i][1],fontsize=10)
+            axest.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
+            axest.imshow(images[i][0])
+        else:
+            axes=plt.subplot(G[crow, ccol])
+            axes.set_title(images[i][1],fontsize=10)
+            axes.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
+            axes.imshow(images[i][0])
+            ccol+=1
+            if ccol>=ncols:
+                ccol=0
+                crow+=1
     if outfile!="":
         plt.savefig(outfile, bbox_inches='tight')
     else:
