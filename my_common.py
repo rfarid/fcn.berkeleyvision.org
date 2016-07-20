@@ -116,6 +116,7 @@ def save_results(outfile, images,nrows=2,ncols=2,do_show=False):
         plt.show()
 
 def advanced_save_results(outfile, images,nrows=8,ncols=8,do_show=False,trows=4,tcols=4,num_t=2):
+    # URL: http://www.python-course.eu/matplotlib_multiple_figures.php
     plt.figure(1,figsize=(FIG_SIZE_W,FIG_SIZE_H))
     plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
     G = gridspec.GridSpec(nrows, ncols)
