@@ -7,10 +7,13 @@
 import os
 import caffe
 import logging
+import scipy.io
 import argparse
 import numpy as np
 from PIL import Image
 from my_common import *
+import sklearn.metrics as skmetrics
+# http://scikit-learn.org/stable/modules/classes.html#module-sklearn.metrics
 
 dim = 500
 # blob_strs=['score_sem', 'score_geo'] # 'score'
@@ -67,10 +70,21 @@ def do_infer(im,net):
 		out = out * COEF
 		images.append([out,blob_str])
 		# scipy.misc.toimage(out, cmin=0, cmax=255).save(outfile)
-	out_class_chosen = highlight_class(out_semantic, chosen_class_num,COEF)
-	images.append([out_class_chosen,"Class "+str(chosen_class_num)+"?"])
+	out_class_chosen = highlight_class(out_semantic, CHOSEN_CLASS,COEF)
+	images.append([out_class_chosen,"Class "+str(CHOSEN_CLASS)+"?"])
 
 	return out_semantic, images
+
+def load_mat_semantic_segmentation(infile):
+	mat_file= infile.replace("Images", "SemanticLabels", 1)
+	mat_file= mat_file.replace(".jpg",".mat", 1)
+	mat = scipy.io.loadmat(mat_file)
+	in_arr = mat['S']
+	if CHOSEN_CLASS!=0:
+		if np.count_nonzero(in_arr == CHOSEN_CLASS)==0:
+			return None
+	in_arr[in_arr!=CHOSEN_CLASS]=0
+	return in_arr
 
 def load_and_infer(infiles, save_classes_separate, outfolder):
     if not os.path.isdir(outfolder):
@@ -79,59 +93,76 @@ def load_and_infer(infiles, save_classes_separate, outfolder):
     	print "exists"
 	for infile in infiles:
 		print "Input:",infile
-		index=infile.rfind("/")
-		filename=infile[index+1:-4]
-		outfile_prefix = outfolder+"/"+filename + "_out_" + sift_type
 		im = Image.open(infile)
-		w,h = im.size
-		if w>dim or h>dim:
-			input_images=[]			
-			print "w=",w,"h=",h, "/\\" * 30
-			# full resize - keep aspect ratio
-			im.thumbnail((dim,dim), Image.ANTIALIAS)
-			input_images.append((im,outfile_prefix+"_thumb.jpg"))
-			im = Image.open(infile)
-			if DO_RESIZE:
-				# full resize - do not keep aspect ratio
-				im_full_resized = im.resize((dim,dim), Image.ANTIALIAS)
-				input_images.append((im_full_resized,outfile_prefix+"_resized_"+str(dim)+"x"+str(dim)+".jpg"))
-			if DO_TILING:
-				new_w=int(float(w)*partial_resize)
-				new_h=int(float(h)*partial_resize)
-				print "new::w=",new_w,"h=",new_h, "+" * 30
-				im = im.resize((new_w,new_h),Image.ANTIALIAS)
-				new_h = int(float(new_h) * max_h_perc)
-				counter=1
-				prev_box=(0,0,0,0)
-				for j in range(0,new_h-tile_step//2, tile_step):
-					for i in range(0,new_w-tile_step//2, tile_step):
-						box=form_boundary((i,j),(new_w,new_h),dim)
-						if box!=prev_box:
-							# print i,j,box
-							region=im.crop(box)
-							input_images.append((region,outfile_prefix+"_tile_"+str(counter)+".jpg"))
-							counter+=1
-							prev_box=box
+		if do_evaluate:
+			ground_truth = load_mat_semantic_segmentation(infile)
+			if ground_truth is None:
+				continue
+			print "ground_truth dim::",ground_truth.shape
+			out_semantic, images = do_infer(im,net)
+			predicted = np.copy(out_semantic)
+			pred_CHOSEN_CLASS=CHOSEN_CLASS-1
+			predicted[predicted!=pred_CHOSEN_CLASS]=0
+			print "predicted dim::",predicted.shape
+			TnFpFnTp=skmetrics.confusion_matrix(ground_truth.flatten(),predicted.flatten()).flatten()
+			print TnFpFnTp
+			# precision=skmetrics.precision_score(ground_truth.flatten(),predicted.flatten())
+			# accuracy=skmetrics.accuracy_score(ground_truth.flatten(),predicted.flatten())
+			# recall=skmetrics.recall_score(ground_truth.flatten(),predicted.flatten())
+			# print accuracy, precision, recall
 		else:
-			# if w<dim and h<dim:
-			# 	im.thumbnail((dim,dim), Image.ANTIALIAS)
-			input_images=[(im,outfile_prefix+".jpg")]
-		counter=0
-		for input_image in input_images:
-			print "Output:", input_image[1]+"..."
-			out_semantic, images = do_infer(input_image[0],net)
-			save_results(input_image[1],images,nrows,ncols)
-			if save_classes_separate:
-				classes_outfile=input_image[1][:-4]+"_classes.jpg"
-				class_images=[]
-				class_images.append(images[0][:])
-				class_images.append(images[1][:])
-				class_images_out=highlight_classes(out_semantic, class_numbers, class_images, COEF)
-				# for class_number in class_numbers:
-				# 	out_class_temp = highlight_class(out_semantic,class_number,COEF)
-				# 	class_images.append((out_class_temp,class_names[class_number-1]))
-				# save_results(classes_outfile,class_images_out,5,7)
-				advanced_save_results(classes_outfile,class_images_out)
+			index=infile.rfind("/")
+			filename=infile[index+1:-4]
+			outfile_prefix = outfolder+"/"+filename + "_out_" + sift_type
+			w,h = im.size
+			if w>dim or h>dim:
+				input_images=[]			
+				print "w=",w,"h=",h, "/\\" * 30
+				# full resize - keep aspect ratio
+				im.thumbnail((dim,dim), Image.ANTIALIAS)
+				input_images.append((im,outfile_prefix+"_thumb.jpg"))
+				im = Image.open(infile)
+				if DO_RESIZE:
+					# full resize - do not keep aspect ratio
+					im_full_resized = im.resize((dim,dim), Image.ANTIALIAS)
+					input_images.append((im_full_resized,outfile_prefix+"_resized_"+str(dim)+"x"+str(dim)+".jpg"))
+				if DO_TILING:
+					new_w=int(float(w)*partial_resize)
+					new_h=int(float(h)*partial_resize)
+					print "new::w=",new_w,"h=",new_h, "+" * 30
+					im = im.resize((new_w,new_h),Image.ANTIALIAS)
+					new_h = int(float(new_h) * max_h_perc)
+					counter=1
+					prev_box=(0,0,0,0)
+					for j in range(0,new_h-tile_step//2, tile_step):
+						for i in range(0,new_w-tile_step//2, tile_step):
+							box=form_boundary((i,j),(new_w,new_h),dim)
+							if box!=prev_box:
+								# print i,j,box
+								region=im.crop(box)
+								input_images.append((region,outfile_prefix+"_tile_"+str(counter)+".jpg"))
+								counter+=1
+								prev_box=box
+			else:
+				# if w<dim and h<dim:
+				# 	im.thumbnail((dim,dim), Image.ANTIALIAS)
+				input_images=[(im,outfile_prefix+".jpg")]
+			counter=0
+			for input_image in input_images:
+				print "Output:", input_image[1]+"..."
+				out_semantic, images = do_infer(input_image[0],net)
+				save_results(input_image[1],images,nrows,ncols)
+				if save_classes_separate:
+					classes_outfile=input_image[1][:-4]+"_classes.jpg"
+					class_images=[]
+					class_images.append(images[0][:])
+					class_images.append(images[1][:])
+					class_images_out=highlight_classes(out_semantic, class_numbers, class_images, COEF)
+					# for class_number in class_numbers:
+					# 	out_class_temp = highlight_class(out_semantic,class_number,COEF)
+					# 	class_images.append((out_class_temp,class_names[class_number-1]))
+					# save_results(classes_outfile,class_images_out,5,7)
+					advanced_save_results(classes_outfile,class_images_out)
 
 def choose_experiment_and_infer():
 	infiles=[
@@ -177,9 +208,12 @@ if __name__ == '__main__':
 	parser.add_argument("-j", "--just_chosen_class", action="store_true", dest="save_just_chosen_class",
 		help="save just chosen class")
 	parser.add_argument("--log", "--loglevel", dest="loglevel",
-	                    help="log level: DEBUG, INFO(*), WARNING, ERROR, CRITICAL")
+		help="log level: DEBUG, INFO(*), WARNING, ERROR, CRITICAL")
 	parser.add_argument('--tile', "--apply_tiling", dest="apply_tiling", action="store_true", help="apply tiling")
 	parser.add_argument('--rnrk', "--resize_not_ratio_kept", dest="resize_not_ratio_kept", action="store_true", help="resize without keeping the ratio")
+	parser.add_argument('-e', "--evaluate", dest="do_evaluate", action="store_true",
+		help="produce the classification evaluation")
+
 	# -------------------------------------------------------------------
 	# Processing args
 	# -------------------------------------------------------------------
@@ -190,15 +224,16 @@ if __name__ == '__main__':
 	set_log_config(loglevel, LOG_LEVEL_DEF)
 	save_classes_separate=args.save_classes_separate
 	apply_filter=args.apply_emboss_filter
-	chosen_class_num = args.chosen_class_num
+	CHOSEN_CLASS = args.chosen_class_num
 	save_just_chosen_class=args.save_just_chosen_class
 	DO_TILING=args.apply_tiling
 	DO_RESIZE=args.resize_not_ratio_kept
+	do_evaluate = args.do_evaluate
 
 	just_str=""
 	if save_just_chosen_class:
-		class_numbers=[chosen_class_num]
-		just_str="_just_"+str(chosen_class_num)
+		class_numbers=[CHOSEN_CLASS]
+		just_str="_just_"+str(CHOSEN_CLASS)
 	# load net
 	# net = caffe.Net('fcn8s/deploy.prototxt', 'fcn8s/fcn8s-heavy-40k.caffemodel', caffe.TEST)
 	net = caffe.Net(deploy_file, model_file, caffe.TEST)
