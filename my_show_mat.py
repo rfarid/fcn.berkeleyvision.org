@@ -1,6 +1,6 @@
 # Reza Farid, Fugro Roames
 # Created:      2016/07/15
-# Last update:  2016/07/15
+# Last update:  2016/07/25
 #
 # a code to display FCNSS mat file
 import os
@@ -18,13 +18,13 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='...')
 	parser.add_argument("infile", type=str, nargs=1, help='input file')
 	parser.add_argument('--as', '--use_as', type=str, dest="infile_type", default="i",
-	                    help='type of infile: i (single-image)(*), p (image_pattern), l (image list file), v (video), ias (image-annotations), s (annotation set per entry)')
+		help='type of infile: i (single-image)(*), p (image_pattern), l (image list file), v (video), ias (image-annotations), s (annotation set per entry)')
 	parser.add_argument('-c', '--chosen_class_num', type=int, dest="chosen_class_num", default=CHOSEN_CLASS,
-	                    help='just consider images which have this class number, 0 means all')
+		help='just consider images which have this class number, 0 means all')
 	parser.add_argument("-j", "--just_chosen_class", action="store_true", dest="save_just_chosen_class",
 		help="save just chosen class")
 	parser.add_argument("--log", "--loglevel", dest="loglevel",
-	                    help="log level: DEBUG, INFO(*), WARNING, ERROR, CRITICAL")
+		help="log level: DEBUG, INFO(*), WARNING, ERROR, CRITICAL")
 	# -------------------------------------------------------------------    
 	# Processing args
 	# -------------------------------------------------------------------
@@ -33,6 +33,7 @@ if __name__ == '__main__':
 	input_file = args.infile[0]
 	chosen_class_num = args.chosen_class_num
 	save_just_chosen_class=args.save_just_chosen_class
+
 	just_str=""
 	if save_just_chosen_class:
 		class_numbers=[chosen_class_num]
