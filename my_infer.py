@@ -80,39 +80,50 @@ def load_mat_semantic_segmentation(infile):
 	mat_file= mat_file.replace(".jpg",".mat", 1)
 	mat = scipy.io.loadmat(mat_file)
 	in_arr = mat['S']
-	if CHOSEN_CLASS!=0:
-		if np.count_nonzero(in_arr == CHOSEN_CLASS)==0:
-			return None
-	in_arr[in_arr!=CHOSEN_CLASS]=0
 	return in_arr
 
 def load_and_infer(infiles, save_classes_separate, outfolder):
-    if not os.path.isdir(outfolder):
-        os.mkdir(outfolder)
-    else:
-    	print "exists"
+	if not os.path.isdir(outfolder):
+		os.mkdir(outfolder)
+	else:
+		print "exists"
+	out_files=[]
+	out_accuracies=[]
+	out_precisions=[]
+	out_recalls=[]
+	out_conf_matrices=[]
 	for infile in infiles:
 		print "Input:",infile
 		im = Image.open(infile)
+		index=infile.rfind("/")
+		filename=infile[index+1:-4]
 		if do_evaluate:
 			ground_truth = load_mat_semantic_segmentation(infile)
 			if ground_truth is None:
 				continue
-			print "ground_truth dim::",ground_truth.shape
+			else:
+				ground_truth[ground_truth!=CHOSEN_CLASS]=0
+				ground_truth[ground_truth==CHOSEN_CLASS]=1
+			# print "ground_truth dim::",ground_truth.shape
 			out_semantic, images = do_infer(im,net)
 			predicted = np.copy(out_semantic)
 			pred_CHOSEN_CLASS=CHOSEN_CLASS-1
 			predicted[predicted!=pred_CHOSEN_CLASS]=0
-			print "predicted dim::",predicted.shape
-			TnFpFnTp=skmetrics.confusion_matrix(ground_truth.flatten(),predicted.flatten()).flatten()
-			print TnFpFnTp
-			# precision=skmetrics.precision_score(ground_truth.flatten(),predicted.flatten())
-			# accuracy=skmetrics.accuracy_score(ground_truth.flatten(),predicted.flatten())
-			# recall=skmetrics.recall_score(ground_truth.flatten(),predicted.flatten())
-			# print accuracy, precision, recall
+			predicted[predicted==pred_CHOSEN_CLASS]=1
+			# print "predicted dim::",predicted.shape
+			gt_flatten=ground_truth.flatten()
+			pr_flatten=predicted.flatten()
+			TnFpFnTp=skmetrics.confusion_matrix(gt_flatten,pr_flatten)
+			precision=round(skmetrics.precision_score(gt_flatten,pr_flatten)*100.0,3)
+			accuracy=round(skmetrics.accuracy_score(gt_flatten,pr_flatten)*100.0,3)
+			recall=round(skmetrics.recall_score(gt_flatten,pr_flatten)*100.0,3)
+			out_files.append(filename)
+			out_accuracies.append(accuracy)
+			out_precisions.append(precision)
+			out_recalls.append(recall)
+			out_conf_matrices.append(list(TnFpFnTp.flatten()))
+			print "Item#=",len(out_files), "Confusion matrix=", list(TnFpFnTp.flatten()), ("acc= %2.3f, precision= %2.3f, recall= %2.3f"%(accuracy, precision, recall))
 		else:
-			index=infile.rfind("/")
-			filename=infile[index+1:-4]
 			outfile_prefix = outfolder+"/"+filename + "_out_" + sift_type
 			w,h = im.size
 			if w>dim or h>dim:
@@ -163,7 +174,25 @@ def load_and_infer(infiles, save_classes_separate, outfolder):
 					# 	class_images.append((out_class_temp,class_names[class_number-1]))
 					# save_results(classes_outfile,class_images_out,5,7)
 					advanced_save_results(classes_outfile,class_images_out)
-
+	n=len(out_files)
+	if n>0:
+		outfile=outfolder+"/0eval.txt"
+		out_files.append("--- AVG ---")
+		out_accuracies.append(round(np.average(out_accuracies),3))
+		out_precisions.append(round(np.average(out_precisions),3))
+		out_recalls.append(round(np.average(out_recalls),3))
+		avg_confusion_matrix=list(np.round(np.average(np.array(out_conf_matrices),axis=0),3))
+		out_conf_matrices.append(avg_confusion_matrix)
+		with open(outfile, "w") as out_handle:
+			out_handle.write("file_name\taccuracy\tprecision\trecall\tTn\tFp\tFn\tTp\n")
+			for i in range(n+1):
+				out_handle.write(out_files[i]+"\t")
+				out_handle.write(str(out_accuracies[i])+"\t")
+				out_handle.write(str(out_precisions[i])+"\t")
+				out_handle.write(str(out_recalls[i])+"\t")
+				for item in out_conf_matrices[i]:
+					out_handle.write(str(item)+"\t")
+				out_handle.write("\n")
 def choose_experiment_and_infer():
 	infiles=[
 		infolder+'/ex1_04.jpg',
