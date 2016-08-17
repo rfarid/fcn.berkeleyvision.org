@@ -4,6 +4,9 @@
 #
 # This code is a modified version of infer.py
 #
+# Examples:
+#
+# python my_infer.py --in 0my_data/c2_f01357.jpg --as i --tile
 import os
 import caffe
 import logging
